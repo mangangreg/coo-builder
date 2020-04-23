@@ -14,7 +14,6 @@ class COOBuilder():
 
         # The dictionary of common terms (which maps a term to an integer that coresponds to hypothetical column index) and the counter for # of common terms
         self.terms = {}
-        self.term_count = 0
 
         #file count tracker
         self.file_count = 0
@@ -29,9 +28,11 @@ class COOBuilder():
         term (string) - the word/term being added
         '''
         if term not in self.terms:
-            self.terms[term] = self.term_count
-            self.term_count += 1
+            self.terms[term] = len(self.terms)
         return self.terms[term]
+
+    def _generate_ind2word(self):
+        self.ind2word = {v:k for k,v in self.terms.items()}
 
     def word_lookup(self, ind):
         '''
@@ -40,8 +41,8 @@ class COOBuilder():
         ind - the index of a term in the self.terms dictionary
         returns the term (as a string)
         '''
-        if self.ind2word == None:
-            self.ind2word = {v:k for k,v in builder.terms.items()}
+        if not self.ind2word:
+            self._generate_ind2word()
         return self.ind2word[ind]
 
     def add_doc_counter(self, file_ind, term_counter):
@@ -64,7 +65,7 @@ class COOBuilder():
         '''
         Get the shape of the hypothetical matrix
         '''
-        return self.file_count, self.term_count
+        return self.file_count, len(self.terms)
 
     def to_coo(self):
         '''
@@ -77,3 +78,43 @@ class COOBuilder():
         vals = np.frombuffer(self.data, dtype=np.int32)
 
         return sp.coo_matrix( (vals, (coord_i,coord_j)), shape = self.get_shape())
+
+    def drop_columns(self, remove_idx):
+        '''
+        Remove columns from the matrix by id
+
+        remove_idx (list) - a list of column indices to be removed
+        '''
+        if not self.ind2word:
+            self._generate_ind2word()
+
+        ind = 0
+
+        while ind < len(self.data) :
+            if self.j[ind] in remove_idx:
+                self.i.pop(ind)
+                self.j.pop(ind)
+                self.data.pop(ind)
+            else:
+                ind +=1
+
+        terms_new = {}
+        id_new = 0
+        for i in range(len(self.terms)):
+            if i not in remove_idx:
+                terms_new[self.ind2word[i]] = id_new
+                id_new +=1
+
+
+        self.terms = terms_new
+        self._generate_ind2word()
+
+    def drop_columns_by_terms(self, term_list):
+        '''
+        Remove columns from the matrix by term
+
+        term_list (list) - a list of terms to be removed
+
+        '''
+        remove_idx = [self.terms[term] for term in term_list]
+        self.drop_columns(remove_idx)
